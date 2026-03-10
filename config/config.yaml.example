@@ -1,0 +1,16 @@
+snowflake:
+  account: ${SNOWFLAKE_ACCOUNT}
+  user: ${SNOWFLAKE_USER}
+  password: ${SNOWFLAKE_PASSWORD}
+  database: SALES_DW
+  warehouse: COMPUTE_WH
+  role: SYSADMIN
+
+paths:
+  inbox: ./inbox
+  archive: ./archive
+
+limits:
+  batch_dates: 40
+  transaction_dates: 40
+  top_dates: 10

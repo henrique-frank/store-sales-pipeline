@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.env
+config/config.yaml
+.cursor/
+superpowers/
+node_modules/
+package.json
+package-lock.json
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.venv/
+*.pdf
