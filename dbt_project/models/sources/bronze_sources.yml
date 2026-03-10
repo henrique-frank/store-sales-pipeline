@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: bronze
+    database: SALES_DW
+    schema: BRONZE
+    tables:
+      - name: stores_raw
+        description: Raw store data as received from CSV files
+      - name: sales_raw
+        description: Raw sales transactions as received from CSV files
+      - name: ingestion_log
+        description: File ingestion tracking for idempotency and audit

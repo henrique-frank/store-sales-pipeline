@@ -1,0 +1,15 @@
+name: sales_pipeline
+version: "1.0.0"
+profile: sales_pipeline
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+models:
+  sales_pipeline:
+    silver:
+      +materialized: incremental
+      +schema: SILVER
+    gold:
+      +materialized: table
+      +schema: GOLD
