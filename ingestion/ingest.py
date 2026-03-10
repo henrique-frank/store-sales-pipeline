@@ -16,6 +16,7 @@ import snowflake.connector
 from ingestion.config import load_config
 from ingestion.validate import (
     compute_file_hash,
+    count_columns,
     detect_file_type,
     extract_batch_date,
     has_header,
@@ -65,8 +66,13 @@ def copy_stores(cursor, file_name: str, batch_date: str, skip_header: bool):
     return cursor.fetchone()
 
 
-def copy_sales(cursor, file_name: str, batch_date: str, skip_header: bool):
+def copy_sales(cursor, file_name: str, batch_date: str, skip_header: bool,
+               col_count: int = 7):
     skip = 1 if skip_header else 0
+    if col_count >= 7:
+        select_cols = "$1, $2, $3, $4, $5, $6, $7"
+    else:
+        select_cols = "$1, $2, $3, $4, $5, NULL, $6"
     sql = f"""
         COPY INTO BRONZE.SALES_RAW (
             store_token, transaction_id, receipt_token,
@@ -74,7 +80,7 @@ def copy_sales(cursor, file_name: str, batch_date: str, skip_header: bool):
             batch_date, file_name
         )
         FROM (
-            SELECT $1, $2, $3, $4, $5, $6, $7,
+            SELECT {select_cols},
                    '{batch_date}'::DATE,
                    '{file_name}'
             FROM @BRONZE.STG_INBOX/{file_name}
@@ -123,7 +129,8 @@ def process_file(cursor, filepath: str, archive_dir: str) -> dict:
     if file_type == "stores":
         result = copy_stores(cursor, filename, batch_date, header)
     else:
-        result = copy_sales(cursor, filename, batch_date, header)
+        cols = count_columns(filepath)
+        result = copy_sales(cursor, filename, batch_date, header, cols)
 
     row_count = result[3] if result and len(result) > 3 else 0
     log_ingestion(cursor, file_type, batch_date, filename, content_hash, row_count)

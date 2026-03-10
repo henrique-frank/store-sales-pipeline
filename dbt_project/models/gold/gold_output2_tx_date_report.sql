@@ -14,14 +14,13 @@ dates as (
     qualify dense_rank() over (order by transaction_date desc) <= 40
 ),
 
-daily as (
+all_daily as (
     select
-        b.transaction_date,
-        count(distinct b.store_token) as stores_with_tx,
-        sum(b.amount) as total_sales_amount,
-        avg(b.amount) as total_sales_avg
-    from base b
-    inner join dates d on d.transaction_date = b.transaction_date
+        transaction_date,
+        count(distinct store_token) as stores_with_tx,
+        sum(amount) as total_sales_amount,
+        avg(amount) as total_sales_avg
+    from base
     group by 1
 ),
 
@@ -33,7 +32,7 @@ month_accumulated as (
             order by transaction_date
             rows between unbounded preceding and current row
         ) as month_accumulated_sales
-    from daily
+    from all_daily
 ),
 
 top_store as (
@@ -59,13 +58,13 @@ top_store as (
 select
     current_date() as snapshot_date,
     d.transaction_date,
-    day.stores_with_tx,
-    day.total_sales_amount,
-    round(day.total_sales_avg, 2) as total_sales_avg,
+    ad.stores_with_tx,
+    ad.total_sales_amount,
+    round(ad.total_sales_avg, 2) as total_sales_avg,
     ma.month_accumulated_sales,
     ts.top_store_token
 from dates d
-left join daily day on day.transaction_date = d.transaction_date
+inner join all_daily ad on ad.transaction_date = d.transaction_date
 left join month_accumulated ma on ma.transaction_date = d.transaction_date
 left join top_store ts on ts.transaction_date = d.transaction_date
 order by d.transaction_date desc

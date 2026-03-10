@@ -39,6 +39,15 @@ def has_header(filepath: str) -> bool:
     return False
 
 
+def count_columns(filepath: str) -> int:
+    """Count the number of comma-separated fields in the first data row."""
+    with open(filepath, "r", encoding="utf-8") as f:
+        first_line = f.readline().strip()
+        if has_header(filepath):
+            first_line = f.readline().strip()
+    return len(first_line.split(",")) if first_line else 0
+
+
 def compute_file_hash(filepath: str) -> str:
     h = hashlib.sha256()
     with open(filepath, "rb") as f:
