@@ -125,7 +125,7 @@ def process_file(cursor, filepath: str, archive_dir: str) -> dict:
     else:
         result = copy_sales(cursor, filename, batch_date, header)
 
-    row_count = result[0] if result else 0
+    row_count = result[3] if result and len(result) > 3 else 0
     log_ingestion(cursor, file_type, batch_date, filename, content_hash, row_count)
     archive_file(filepath, file_type, batch_date, archive_dir)
 

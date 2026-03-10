@@ -13,3 +13,9 @@ build/
 .pytest_cache/
 .venv/
 *.pdf
+dbt_project/profiles.yml
+dbt_project/.user.yml
+dbt_project/target/
+dbt_project/logs/
+archive/
+inbox/

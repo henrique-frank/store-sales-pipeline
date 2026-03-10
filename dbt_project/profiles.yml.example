@@ -9,5 +9,5 @@ sales_pipeline:
       database: SALES_DW
       warehouse: COMPUTE_WH
       schema: SILVER
-      role: SYSADMIN
+      role: ACCOUNTADMIN
       threads: 4
