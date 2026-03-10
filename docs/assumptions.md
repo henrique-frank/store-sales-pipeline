@@ -1,0 +1,39 @@
+# Assumptions — Store Sales Pipeline
+
+These assumptions were made to proceed with the first version. Items marked with a question were sent to the product team and may be revised based on their response.
+
+## Data & Dedup
+
+1. **"Keep the latest received value"** means latest by ingestion timestamp (`load_ts`), not by `transaction_time`. Rationale: "received" implies arrival order in our system.
+
+2. **Dedup key** is `(store_token, transaction_id)` as stated in the spec.
+
+3. **SCD Type 1 for stores**: If `store_name` or `store_group` changes for an existing `store_token`, we overwrite with the latest values but preserve `first_seen_ts`.
+
+## File Format
+
+4. **Amount always includes `$` prefix** (as shown in the sample: `$63.98`). We strip `$` and parse to `DECIMAL(11,2)`. Unparseable values are marked invalid.
+
+5. **`source_id` column** (QUESTION SENT): The sample shows 7 columns including `source_id`, but the spec defines only 6. We load all 7 columns into Bronze and ignore `source_id` in Silver. The file format uses `ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE` to handle files with either 6 or 7 columns.
+
+6. **Header detection**: Files with headers are auto-detected by checking if the first row contains known column names. `SKIP_HEADER` is set accordingly.
+
+7. **`transaction_time` format**: Sample shows `20211001T174600.000`. We use Snowflake's `TRY_TO_TIMESTAMP_NTZ()` which handles this and other standard formats. Unparseable values are invalid.
+
+## Output Definitions
+
+8. **Output 2 "month accumulated sales"** (QUESTION SENT): Assumed to be month-to-date running total (cumulative sum up to each transaction date within the month), not the full month total repeated.
+
+9. **Output 1 counts**: `total_processed_raw` = all rows loaded into Bronze for that batch date. `total_valid` = rows that passed validation into Silver. `total_invalid` = raw - valid.
+
+10. **"Last 40/10 dates"**: Refers to distinct dates with data available, not calendar days.
+
+## Operations
+
+11. **Idempotency**: Files are tracked by SHA-256 content hash. Re-running the pipeline on already-processed files skips them.
+
+12. **Data retention**: All data is retained in Silver. Retention limits (40/40/10) only apply to Gold report outputs.
+
+13. **Multiple files per batch_date**: Possible (spec says "one or more files"). All rows are unioned and deduplication happens in Silver.
+
+14. **Archive**: Processed files are moved to `archive/{type}/{batch_date}/` to keep the inbox clean.
