@@ -45,7 +45,7 @@ BRONZE (raw)                    SILVER (clean)                  GOLD (reports)
 
 - `fact_sales.store_token` references `dim_store.store_token`
 - `output3.store_token` joins `dim_store` for `store_name`
-- `output1` uses `ingestion_log` counts + `fact_sales` valid counts
+- `output1` uses Bronze `sales_raw` for raw counts + `sales_rejected` for invalid counts
 
 ## Deduplication Strategy
 

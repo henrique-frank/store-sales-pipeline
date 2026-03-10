@@ -18,13 +18,13 @@ These assumptions were made to proceed with the first version. Items marked with
 
 6. **Header detection**: Files with headers are auto-detected by checking if the first row contains known column names. `SKIP_HEADER` is set accordingly.
 
-7. **`transaction_time` format**: Sample shows `20211001T174600.000`. We use Snowflake's `TRY_TO_TIMESTAMP_NTZ()` which handles this and other standard formats. Unparseable values are invalid.
+7. **`transaction_time` format**: Sample shows `20211001T174600.000`. Snowflake's default `TRY_TO_TIMESTAMP_NTZ()` doesn't parse this compact format automatically, so we apply an explicit format (`YYYYMMDD"T"HH24MISS.FF3`) as fallback. Both standard ISO and compact formats are accepted. Unparseable values are marked invalid.
 
 ## Output Definitions
 
 8. **Output 2 "month accumulated sales"** (QUESTION SENT): Assumed to be month-to-date running total (cumulative sum up to each transaction date within the month), not the full month total repeated.
 
-9. **Output 1 counts**: `total_processed_raw` = all rows loaded into Bronze for that batch date. `total_valid` = rows that passed validation into Silver. `total_invalid` = raw - valid.
+9. **Output 1 counts**: `total_processed_raw` = all rows loaded into Bronze for that batch date. `total_invalid` = rows captured in `sales_rejected` (failed validation). `total_valid` = raw - invalid. This counts valid-format rows before deduplication.
 
 10. **"Last 40/10 dates"**: Refers to distinct dates with data available, not calendar days.
 

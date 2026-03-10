@@ -9,7 +9,10 @@ with src as (
         store_token,
         transaction_id,
         receipt_token,
-        try_to_timestamp_ntz(transaction_time) as transaction_time,
+        coalesce(
+            try_to_timestamp_ntz(transaction_time),
+            try_to_timestamp_ntz(transaction_time, 'YYYYMMDD\"T\"HH24MISS.FF3')
+        ) as transaction_time,
         {{ clean_amount('amount') }} as amount,
         user_role,
         batch_date,

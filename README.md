@@ -1,11 +1,11 @@
 # Store Sales Pipeline
 
-Daily ingestion and reporting pipeline for store sales transactions. Built with **Python**, **Snowflake**, and **dbt Cloud** using a Bronze/Silver/Gold medallion architecture.
+Daily ingestion and reporting pipeline for store sales transactions. Built with **Python**, **Snowflake**, and **dbt Core** using a Bronze/Silver/Gold medallion architecture.
 
 ## Architecture
 
 ```
-  inbox/ (CSVs)          Snowflake                              dbt Cloud
+  inbox/ (CSVs)          Snowflake                              dbt Core
  ┌──────────────┐   ┌──────────────────────────────────────────────────────────┐
  │ stores_*.csv │──>│  BRONZE           SILVER                GOLD            │
  │ sales_*.csv  │──>│  stores_raw ────> dim_store ──────────> output3 (top5)  │
@@ -25,7 +25,7 @@ Daily ingestion and reporting pipeline for store sales transactions. Built with 
 
 - Python 3.11+
 - Snowflake account ([free trial](https://signup.snowflake.com))
-- dbt Cloud account ([free tier](https://cloud.getdbt.com))
+- dbt Core with `dbt-snowflake` adapter (`pip install dbt-snowflake`)
 - Git
 
 ## Setup
@@ -60,13 +60,15 @@ cp config/config.yaml.example config/config.yaml
 
 The config file references these environment variables — no credentials are stored in files.
 
-### 4. dbt Cloud setup
+### 4. dbt setup
 
-1. Create a new project in dbt Cloud
-2. Connect to your Snowflake account
-3. Link this GitHub repository
-4. Set the project subdirectory to `dbt_project/`
-5. Create a job with command: `dbt build`
+```bash
+pip install dbt-snowflake
+cd dbt_project
+cp profiles.yml.example profiles.yml
+```
+
+The profiles file reads credentials from the same environment variables set in step 3.
 
 ## Running the Pipeline
 
@@ -81,20 +83,24 @@ python -m ingestion.ingest --config config/config.yaml
 The script will:
 - Discover `stores_*.csv` and `sales_*.csv` files
 - Skip files already processed (idempotent via content hash)
-- Load data into Snowflake Bronze tables
+- Upload and load data into Snowflake Bronze tables via PUT + COPY INTO
 - Move processed files to `archive/`
 
 ### Step 2: Run dbt transformations
 
-Run the dbt job in dbt Cloud, or locally:
-
 ```bash
 cd dbt_project
-dbt run
-dbt test
+dbt run --profiles-dir .
+dbt test --profiles-dir .
 ```
 
 This transforms Bronze → Silver → Gold and produces the 3 report outputs.
+
+For a full build (run + test in one command):
+
+```bash
+dbt build --profiles-dir .
+```
 
 ### Step 3: Query outputs
 
@@ -112,9 +118,11 @@ cp data/sample/*.csv inbox/
 
 python -m ingestion.ingest --config config/config.yaml
 
-cd dbt_project && dbt build
+cd dbt_project
+dbt build --profiles-dir .
 
-cd .. && python -m pytest tests/ -v
+cd ..
+python -m pytest tests/ -v
 ```
 
 ## Project Structure
@@ -139,7 +147,8 @@ cd .. && python -m pytest tests/ -v
 │   ├── dbt_project.yml                dbt configuration
 │   ├── profiles.yml.example           dbt profiles template
 │   ├── macros/
-│   │   └── clean_amount.sql           Strip $ and parse amounts
+│   │   ├── clean_amount.sql           Strip $ and parse amounts
+│   │   └── generate_schema_name.sql   Override default schema naming
 │   └── models/
 │       ├── sources/                   Bronze source definitions
 │       ├── silver/                    Clean + dedup models

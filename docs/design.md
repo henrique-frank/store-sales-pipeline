@@ -2,10 +2,10 @@
 
 ## Architecture Overview
 
-The pipeline follows a **Bronze / Silver / Gold** medallion architecture on Snowflake, with Python handling ingestion and dbt Core (via dbt Cloud) handling all transformations.
+The pipeline follows a **Bronze / Silver / Gold** medallion architecture on Snowflake, with Python handling ingestion and dbt Core handling all transformations.
 
 ```
-  inbox/                Snowflake                          dbt Cloud
+  inbox/                Snowflake                          dbt Core
  ┌──────────┐    ┌─────────────────────────────────────────────────────────┐
  │ CSVs     │    │  BRONZE          SILVER              GOLD              │
  │ stores_* │───>│  stores_raw ───> dim_store ─────────> output3 (top5)   │
@@ -42,7 +42,7 @@ Files are uploaded to a Snowflake internal stage (`@BRONZE.STG_INBOX`) via PUT, 
 dbt incremental models transform Bronze to Silver:
 
 - **silver_dim_store**: SCD Type 1 — upserts by `store_token`, keeps latest `store_name`/`store_group`, preserves `first_seen_ts`
-- **silver_fact_sales**: Validates data types (timestamp, amount), filters invalid rows, deduplicates by `(store_token, transaction_id)` keeping the row with the latest `load_ts`
+- **silver_fact_sales**: Validates data types (timestamp parsed with explicit format `YYYYMMDDTHH24MISS.FF3` plus standard formats, amount stripped of `$`), filters invalid rows, deduplicates by `(store_token, transaction_id)` keeping the row with the latest `load_ts`
 - **silver_sales_rejected**: Captures invalid rows with a `reject_reason` column for audit
 
 **Incremental strategy:** All Silver models use `merge` strategy. On subsequent runs, only rows with `load_ts` greater than the current max are processed, making the pipeline efficient at scale.
@@ -66,3 +66,5 @@ After successful ingestion, source CSV files are moved to `archive/{type}/{batch
 - **Dedup via QUALIFY ROW_NUMBER()** is efficient in Snowflake's columnar engine
 - **Adding new data sources** follows the same pattern: new Bronze table + Silver model
 - **Warehouse sizing** is configurable — scale up the warehouse for larger loads without code changes
+- **Clustering**: For high-volume fact tables, `CLUSTER BY (store_token, transaction_time::date)` can be applied to `silver_fact_sales` to optimize query performance
+- **New data sources** simply follow the same pattern: add a Bronze raw table, a Silver clean model, and Gold reports can reference the new source seamlessly

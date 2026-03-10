@@ -14,7 +14,10 @@ with src as (
         batch_date,
         file_name,
         load_ts,
-        try_to_timestamp_ntz(transaction_time) as parsed_time,
+        coalesce(
+            try_to_timestamp_ntz(transaction_time),
+            try_to_timestamp_ntz(transaction_time, 'YYYYMMDD"T"HH24MISS.FF3')
+        ) as parsed_time,
         {{ clean_amount('amount') }} as parsed_amount
     from {{ source('bronze', 'sales_raw') }}
     {% if is_incremental() %}
