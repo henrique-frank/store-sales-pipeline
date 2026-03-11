@@ -20,3 +20,4 @@ dbt_project/logs/
 archive/
 inbox/
 data/heavy/
+docs/demo_guide.md
