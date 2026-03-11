@@ -63,7 +63,7 @@ flowchart LR
 
 ```bash
 git clone <repo-url>
-cd store-sales-pipeline
+cd snowflake-dbt-store-sales-pipeline
 pip install -r requirements.txt
 ```
 
