@@ -14,7 +14,7 @@ These assumptions were made to proceed with the first version. Items marked with
 
 4. **Amount always includes `$` prefix** (as shown in the sample: `$63.98`). We strip `$` and parse to `DECIMAL(11,2)`. Unparseable values are marked invalid.
 
-5. **`source_id` column** (QUESTION SENT): The sample shows 7 columns including `source_id`, but the spec defines only 6. We load all 7 columns into Bronze and ignore `source_id` in Silver. The file format uses `ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE` to handle files with either 6 or 7 columns.
+5. **`source_id` column** (ANSWERED): The sample showed 7 columns including `source_id`, but Ricardo confirmed this should be ignored — work with the 6 columns from the spec only.
 
 6. **Header detection**: Files with headers are auto-detected by checking if the first row contains known column names. `SKIP_HEADER` is set accordingly.
 
@@ -22,7 +22,7 @@ These assumptions were made to proceed with the first version. Items marked with
 
 ## Output Definitions
 
-8. **Output 2 "month accumulated sales"** (QUESTION SENT): Assumed to be month-to-date running total (cumulative sum up to each transaction date within the month), not the full month total repeated.
+8. **Output 2 "month accumulated sales"** (ANSWERED): Confirmed as month-to-date running total (cumulative sum up to each transaction date within the month).
 
 9. **Output 1 counts**: `total_processed_raw` = all rows loaded into Bronze for that batch date. `total_invalid` = rows captured in `sales_rejected` (failed validation). `total_valid` = raw - invalid. This counts valid-format rows before deduplication.
 

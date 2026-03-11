@@ -1,7 +1,7 @@
-store_token,transaction_id,receipt_token,transaction_time,amount,source_id,user_role
-488bd8b7-f05b-448d-acac-8933abf83c97,27a7720a-c0a9-4391-8458-316059e10fca,v9oOQ0T,20211001T174600.000,$63.98,74ad66c0-dd53-44f4-8e27-16c6b35d7b46,Cashier
-00001a4a-786e-49de-b9cf-2a3f06a1fad9,aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee,ABC123,20211001T120000.000,$150.00,11111111-2222-3333-4444-555555555555,Manager
-00001e36-06bf-4195-9cf0-3cb07eda8b62,cccccccc-dddd-eeee-ffff-111111111111,XYZ789,20211001T090000.000,$25.50,22222222-3333-4444-5555-666666666666,Cashier
-00007ab7-417b-4ccb-b156-0ddbf2a8aa21,dddddddd-eeee-ffff-0000-222222222222,QRS456,20211001T153000.000,$89.99,33333333-4444-5555-6666-777777777777,Cashier
-488bd8b7-f05b-448d-acac-8933abf83c97,27a7720a-c0a9-4391-8458-316059e10fca,v9oOQ0T,20211001T174600.000,$75.00,74ad66c0-dd53-44f4-8e27-16c6b35d7b46,Cashier
-INVALID_TOKEN,bad-uuid,AB,NOT_A_TIMESTAMP,NOT_MONEY,no-source,TooLongUserRoleNameThatExceedsLimit
+store_token,transaction_id,receipt_token,transaction_time,amount,user_role
+488bd8b7-f05b-448d-acac-8933abf83c97,27a7720a-c0a9-4391-8458-316059e10fca,v9oOQ0T,20211001T174600.000,$63.98,Cashier
+00001a4a-786e-49de-b9cf-2a3f06a1fad9,aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee,ABC123,20211001T120000.000,$150.00,Manager
+00001e36-06bf-4195-9cf0-3cb07eda8b62,cccccccc-dddd-eeee-ffff-111111111111,XYZ789,20211001T090000.000,$25.50,Cashier
+00007ab7-417b-4ccb-b156-0ddbf2a8aa21,dddddddd-eeee-ffff-0000-222222222222,QRS456,20211001T153000.000,$89.99,Cashier
+488bd8b7-f05b-448d-acac-8933abf83c97,27a7720a-c0a9-4391-8458-316059e10fca,v9oOQ0T,20211001T174600.000,$75.00,Cashier
+INVALID_TOKEN,bad-uuid,AB,NOT_A_TIMESTAMP,NOT_MONEY,TooLongUserRoleNameThatExceedsLimit

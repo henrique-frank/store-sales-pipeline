@@ -44,14 +44,13 @@ CREATE TABLE IF NOT EXISTS BRONZE.STORES_RAW (
     load_ts         TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
 );
 
--- Sales raw (7 data columns to handle source_id discrepancy + metadata)
+-- Sales raw (6 data columns + metadata)
 CREATE TABLE IF NOT EXISTS BRONZE.SALES_RAW (
     store_token       STRING,
     transaction_id    STRING,
     receipt_token     STRING,
     transaction_time  STRING,
     amount            STRING,
-    source_id         STRING,
     user_role         STRING,
     batch_date        DATE,
     file_name         STRING,

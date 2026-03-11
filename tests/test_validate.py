@@ -44,7 +44,7 @@ def test_has_header_true_stores(tmp_path):
 
 def test_has_header_true_sales(tmp_path):
     f = tmp_path / "test.csv"
-    f.write_text("store_token,transaction_id,receipt_token,transaction_time,amount,source_id,user_role\nabc,def,ghi,123,456,789,Cashier\n")
+    f.write_text("store_token,transaction_id,receipt_token,transaction_time,amount,user_role\nabc,def,ghi,123,456,Cashier\n")
     assert has_header(str(f)) is True
 
 

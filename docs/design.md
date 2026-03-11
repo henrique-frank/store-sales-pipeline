@@ -4,17 +4,58 @@
 
 The pipeline follows a **Bronze / Silver / Gold** medallion architecture on Snowflake, with Python handling ingestion and dbt Core handling all transformations.
 
+```mermaid
+flowchart LR
+  subgraph ingestion ["Python Ingestion"]
+    inbox["inbox/ CSVs"] --> stage["PUT to Stage"]
+    stage --> copy["COPY INTO"]
+    copy --> archive["archive/"]
+  end
+
+  subgraph snowflake ["Snowflake — SALES_DW"]
+    subgraph bronze ["Bronze (raw)"]
+      storesRaw[stores_raw]
+      salesRaw[sales_raw]
+      logTable[ingestion_log]
+    end
+    subgraph silver ["Silver (clean + dedup)"]
+      dimStore[dim_store]
+      factSales[fact_sales]
+      rejected[sales_rejected]
+    end
+    subgraph gold ["Gold (reports)"]
+      out1["output1: batch report"]
+      out2["output2: tx date stats"]
+      out3["output3: top 5 stores"]
+    end
+  end
+
+  copy --> storesRaw
+  copy --> salesRaw
+  copy --> logTable
+  storesRaw -->|"dbt merge"| dimStore
+  salesRaw -->|"dbt merge"| factSales
+  salesRaw -->|"dbt incremental"| rejected
+  factSales --> out1
+  factSales --> out2
+  factSales --> out3
+  dimStore --> out3
 ```
-  inbox/                Snowflake                          dbt Core
- ┌──────────┐    ┌─────────────────────────────────────────────────────────┐
- │ CSVs     │    │  BRONZE          SILVER              GOLD              │
- │ stores_* │───>│  stores_raw ───> dim_store ─────────> output3 (top5)   │
- │ sales_*  │───>│  sales_raw ────> fact_sales ────────> output1 (batch)  │
- │          │    │  ingestion_log   sales_rejected       output2 (tx day) │
- └──────────┘    └─────────────────────────────────────────────────────────┘
-       │                Python PUT + COPY INTO       dbt incremental merge
-       v
-  archive/
+
+### Pipeline Flow
+
+```mermaid
+flowchart TD
+  A["Discover files in inbox/"] --> B{"File already processed?"}
+  B -->|"Yes (hash match)"| C[Skip file]
+  B -->|No| D["Detect header row"]
+  D --> E["PUT file to @STG_INBOX"]
+  E --> F["COPY INTO Bronze table"]
+  F --> G["Log to ingestion_log"]
+  G --> H["Move file to archive/"]
+  H --> I["dbt run: Silver models"]
+  I --> J["dbt run: Gold reports"]
+  J --> K["dbt test: 27 data tests"]
 ```
 
 ## Processing Flow
@@ -35,7 +76,7 @@ CSV files may or may not contain a header row. The ingestion script reads the fi
 
 Files are uploaded to a Snowflake internal stage (`@BRONZE.STG_INBOX`) via PUT, then loaded into Bronze tables via COPY INTO. Metadata columns (`batch_date`, `file_name`, `load_ts`) are added during load. `ON_ERROR = 'CONTINUE'` ensures partial files still load valid rows.
 
-**Design consideration:** The sales table includes 7 data columns (including `source_id`) to handle the discrepancy between the column spec (6 columns) and the sample data (7 columns). `ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE` in the file format allows files with either 6 or 7 columns to load.
+**Design consideration:** Sales files contain 6 data columns as defined in the spec (store_token, transaction_id, receipt_token, transaction_time, amount, user_role). `ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE` in the file format provides resilience against unexpected extra fields.
 
 ### Stage 5: Silver Transform (dbt)
 
@@ -59,12 +100,17 @@ Three report tables are materialized as full tables (rebuilt each run):
 
 After successful ingestion, source CSV files are moved to `archive/{type}/{batch_date}/` for historical reference.
 
-## Scalability Considerations
+## Scalability — Designed for Millions of Daily Transactions
 
-- **Bronze COPY INTO** parallelizes automatically in Snowflake based on file size
-- **Silver incremental merge** avoids full reprocessing — only new data is transformed
-- **Dedup via QUALIFY ROW_NUMBER()** is efficient in Snowflake's columnar engine
-- **Adding new data sources** follows the same pattern: new Bronze table + Silver model
-- **Warehouse sizing** is configurable — scale up the warehouse for larger loads without code changes
-- **Clustering**: For high-volume fact tables, `CLUSTER BY (store_token, transaction_time::date)` can be applied to `silver_fact_sales` to optimize query performance
-- **New data sources** simply follow the same pattern: add a Bronze raw table, a Silver clean model, and Gold reports can reference the new source seamlessly
+Although the sample data is small, this pipeline is designed to handle production volumes of millions of daily transactions without architectural changes.
+
+| Concern | How it scales |
+|---------|---------------|
+| **Ingestion throughput** | Snowflake COPY INTO parallelizes automatically by file. Split large files into partitioned CSVs for maximum throughput. |
+| **Transform efficiency** | Silver models use incremental merge — only rows with new `load_ts` are processed. Cost stays constant regardless of history size. |
+| **Dedup performance** | `QUALIFY ROW_NUMBER()` runs in a single pass over Snowflake's columnar engine. No self-join or temp tables. |
+| **Warehouse sizing** | Scale from X-Small to 4XL without code changes. Double the warehouse size = roughly half the runtime. |
+| **Query performance** | At production scale, apply `CLUSTER BY (store_token, transaction_time::date)` on `silver_fact_sales` to optimize scan pruning. |
+| **Near-real-time** | Replace PUT + COPY with Snowpipe for continuous ingestion. Same Bronze tables, no downstream changes. |
+| **New data sources** | Follow the same pattern: new Bronze raw table + Silver dbt model. Gold reports can reference new sources seamlessly. |
+| **Orchestration** | Wrap Python ingestion + dbt in Airflow, Snowflake Tasks, or any scheduler. The pipeline is stateless and idempotent. |

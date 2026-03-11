@@ -45,7 +45,7 @@ def write_sales_csv(path, rows, with_header):
         if with_header:
             w.writerow([
                 "store_token", "transaction_id", "receipt_token",
-                "transaction_time", "amount", "source_id", "user_role",
+                "transaction_time", "amount", "user_role",
             ])
         for r in rows:
             w.writerow(r)
@@ -74,14 +74,13 @@ def gen_sales_rows(stores, count, batch_date):
         ts = batch_date.replace(hour=hour, minute=minute, second=second)
         tx_time = ts.strftime("%Y%m%dT%H%M%S.000")
         amount = f"${random.uniform(1, 999.99):.2f}"
-        source_id = str(uuid.uuid4())
         role = random.choice(ROLES)
-        rows.append((store[1], tx_id, receipt, tx_time, amount, source_id, role))
+        rows.append((store[1], tx_id, receipt, tx_time, amount, role))
 
     dup_source = random.sample(rows, min(duplicates, len(rows)))
     for orig in dup_source:
         new_amount = f"${random.uniform(1, 999.99):.2f}"
-        rows.append((orig[0], orig[1], orig[2], orig[3], new_amount, orig[5], orig[6]))
+        rows.append((orig[0], orig[1], orig[2], orig[3], new_amount, orig[5]))
 
     for _ in range(invalid):
         rows.append((
@@ -90,7 +89,6 @@ def gen_sales_rows(stores, count, batch_date):
             "AB",
             "NOT_A_TIMESTAMP",
             "NOT_MONEY",
-            "",
             "X" * 40,
         ))
 

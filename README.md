@@ -4,22 +4,51 @@ Daily ingestion and reporting pipeline for store sales transactions. Built with 
 
 ## Architecture
 
-```
-  inbox/ (CSVs)          Snowflake                              dbt Core
- ┌──────────────┐   ┌──────────────────────────────────────────────────────────┐
- │ stores_*.csv │──>│  BRONZE           SILVER                GOLD            │
- │ sales_*.csv  │──>│  stores_raw ────> dim_store ──────────> output3 (top5)  │
- │              │   │  sales_raw ─────> fact_sales ─────────> output1 (batch) │
- │              │   │  ingestion_log    sales_rejected        output2 (daily) │
- └──────────────┘   └──────────────────────────────────────────────────────────┘
-       │                  Python PUT + COPY INTO         dbt incremental merge
-       v
-  archive/
+```mermaid
+flowchart LR
+  subgraph ingestion ["Python Ingestion"]
+    inbox["inbox/ CSVs"] --> stage["PUT to Stage"]
+    stage --> copy["COPY INTO"]
+    copy --> archive["archive/"]
+  end
+
+  subgraph snowflake ["Snowflake — SALES_DW"]
+    subgraph bronze ["Bronze (raw)"]
+      storesRaw[stores_raw]
+      salesRaw[sales_raw]
+      logTable[ingestion_log]
+    end
+    subgraph silver ["Silver (clean + dedup)"]
+      dimStore[dim_store]
+      factSales[fact_sales]
+      rejected[sales_rejected]
+    end
+    subgraph gold ["Gold (reports)"]
+      out1["output1: batch report"]
+      out2["output2: tx date stats"]
+      out3["output3: top 5 stores"]
+    end
+  end
+
+  copy --> storesRaw
+  copy --> salesRaw
+  copy --> logTable
+  storesRaw -->|"dbt merge"| dimStore
+  salesRaw -->|"dbt merge"| factSales
+  salesRaw -->|"dbt incremental"| rejected
+  factSales --> out1
+  factSales --> out2
+  factSales --> out3
+  dimStore --> out3
 ```
 
-**Bronze** — Raw CSV data with ingestion metadata
-**Silver** — Validated, typed, deduplicated (incremental merge)
-**Gold** — 3 report outputs with retention limits
+| Layer | Purpose |
+|-------|---------|
+| **Bronze** | Raw CSV data with ingestion metadata (`batch_date`, `file_name`, `load_ts`) |
+| **Silver** | Validated, typed, deduplicated via incremental merge |
+| **Gold** | 3 report outputs with retention limits (40/40/10 dates) |
+
+> Designed for millions of daily transactions — all transforms are SQL-based with no Python loops over data. Scales by adjusting Snowflake warehouse size.
 
 ## Prerequisites
 
@@ -154,7 +183,9 @@ python -m pytest tests/ -v
 │       ├── silver/                    Clean + dedup models
 │       └── gold/                      Report output models
 ├── data/
-│   └── sample/                        Sample CSV files for testing
+│   ├── sample/                        Sample CSV files for testing
+│   ├── light/                         Light dataset (50 rows, 3 days)
+│   └── generate_samples.py            Generate light + heavy (100k) test data
 └── tests/                             Python unit tests
 ```
 
@@ -163,4 +194,4 @@ python -m pytest tests/ -v
 - [System Design](docs/design.md) — Architecture, processing flow, design considerations
 - [Assumptions](docs/assumptions.md) — Documented assumptions and decisions
 - [Data Model](docs/data_model.md) — Logical model, DDL reference, dedup strategy
-- [Questions Log](docs/questions.md) — Open questions for stakeholders
+- [Questions Log](docs/questions.md) — Questions and answers from stakeholders

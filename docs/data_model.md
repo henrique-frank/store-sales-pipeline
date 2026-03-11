@@ -21,11 +21,10 @@ BRONZE (raw)                    SILVER (clean)                  GOLD (reports)
 │ receipt_token   │            │ receipt_token     │
 │ transaction_time│            │ transaction_time  │
 │ amount          │            │ amount            │
-│ source_id       │            │ user_role         │
-│ user_role       │            │ batch_date        │
-│ batch_date      │            │ last_load_ts      │
-│ file_name       │            └──────────────────┘
-│ load_ts         │
+│ user_role       │            │ user_role         │
+│ batch_date      │            │ batch_date        │
+│ file_name       │            │ last_load_ts      │
+│ load_ts         │            └──────────────────┘
 └─────────────────┘            ┌──────────────────┐
                                │ sales_rejected   │
 ┌─────────────────┐            │ (same as raw +   │
