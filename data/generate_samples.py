@@ -10,10 +10,15 @@ random.seed(42)
 
 STORE_COUNT_LIGHT = 10
 STORE_COUNT_HEAVY = 500
-SALES_LIGHT = 50
+# Light dataset total sales across all days; enough per day so we
+# always have valid + duplicate + invalid rows to exercise the logic.
+SALES_LIGHT = 500
 SALES_HEAVY = 100_000
-BATCH_DAYS_LIGHT = 3
-BATCH_DAYS_HEAVY = 30
+# Use 50 days in the *light* dataset so we can clearly show
+# the "latest 40 batch dates" behavior in Output 1 without
+# needing separate sample/heavy runs.
+BATCH_DAYS_LIGHT = 50
+BATCH_DAYS_HEAVY = 50
 BASE_DATE = datetime(2024, 10, 1)
 ROLES = ["Cashier", "Manager", "Supervisor", "Clerk", "Admin"]
 
@@ -111,6 +116,32 @@ def generate_light():
         sales = gen_sales_rows(stores, rows_per_day, bd)
         write_sales_csv(f"{out}/sales_{ds}.csv", sales, with_header)
 
+        # On one specific day, also generate a second sales file with
+        # overlapping transactions and different amounts to simulate
+        # "latest received" duplicates across files for the same batch_date.
+        if day == BATCH_DAYS_LIGHT - 1:
+            sales_v2 = []
+            for i, row in enumerate(sales):
+                store_token, tx_id, receipt, tx_time, amount, role = row
+                if i % 2 == 0:
+                    # Same transaction_id but with a different amount
+                    new_amount = f"${random.uniform(1, 999.99):.2f}"
+                    sales_v2.append((store_token, tx_id, receipt, tx_time, new_amount, role))
+                else:
+                    # Keep some rows identical
+                    sales_v2.append(row)
+            write_sales_csv(f"{out}/sales_{ds}_2.csv", sales_v2, with_header)
+
+            # And generate a second stores file with renamed stores to
+            # exercise SCD Type 2 on dim_store for the same batch_date.
+            stores_v2 = []
+            for i, (group, token, name) in enumerate(stores):
+                if i < 3:
+                    stores_v2.append((group, token, f"{name} Renamed"))
+                else:
+                    stores_v2.append((group, token, name))
+            write_stores_csv(f"{out}/stores_{ds}_v2.csv", stores_v2, with_header)
+
     print(f"Light dataset: {STORE_COUNT_LIGHT} stores, ~{SALES_LIGHT} sales, {BATCH_DAYS_LIGHT} days -> {out}/")
 
 
@@ -133,6 +164,7 @@ def generate_heavy():
 
 
 if __name__ == "__main__":
+    # Unified approach: for the assessment demo we only need
+    # the light dataset with 50 days (stores + sales).
     generate_light()
-    generate_heavy()
-    print("Done.")
+    print("Done (light dataset only).")

@@ -143,7 +143,7 @@ SELECT * FROM GOLD.GOLD_OUTPUT3_TOP5_BY_DATE ORDER BY transaction_date DESC, top
 
 ```bash
 mkdir inbox
-cp data/sample/*.csv inbox/
+cp data/light/*.csv inbox/
 
 python -m ingestion.ingest --config config/config.yaml
 
@@ -183,9 +183,8 @@ python -m pytest tests/ -v
 │       ├── silver/                    Clean + dedup models
 │       └── gold/                      Report output models
 ├── data/
-│   ├── sample/                        Sample CSV files for testing
-│   ├── light/                         Light dataset (50 rows, 3 days)
-│   └── generate_samples.py            Generate light + heavy (100k) test data
+│   ├── light/                         Unified light dataset (~500 sales, 50 days)
+│   └── generate_samples.py            Generate the light test data
 └── tests/                             Python unit tests
 ```
 
@@ -195,3 +194,8 @@ python -m pytest tests/ -v
 - [Assumptions](docs/assumptions.md) — Documented assumptions and decisions
 - [Data Model](docs/data_model.md) — Logical model, DDL reference, dedup strategy
 - [Questions Log](docs/questions.md) — Questions and answers from stakeholders
+
+### Mermaid Diagrams — Recommended Preview
+
+To see the Mermaid diagrams in `README.md` and `docs/*.md` (and to export to PDF), use a Markdown preview extension that supports Mermaid. For example, in VS Code / Cursor you can install **Markdown Preview Enhanced** (`shd101wyy.markdown-preview-enhanced`) from the marketplace:  
+[Markdown Preview Enhanced extension](https://marketplace.visualstudio.com/items?itemName=shd101wyy.markdown-preview-enhanced).

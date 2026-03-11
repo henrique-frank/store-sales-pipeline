@@ -2,45 +2,113 @@
 
 ## Logical Model
 
-```
-BRONZE (raw)                    SILVER (clean)                  GOLD (reports)
-┌─────────────────┐            ┌──────────────────┐
-│ stores_raw      │───────────>│ dim_store (SCD2)  │──────────> output3_top5
-│ store_group     │            │ dim_store_key (PK)│
-│ store_token     │            │ store_token       │
-│ store_name      │            │ store_group       │
-│ batch_date      │            │ store_name        │
-│ file_name       │            │ valid_from        │
-│ load_ts         │            │ valid_to          │
-└─────────────────┘            │ is_current        │
-                               │ first_seen_ts     │
-                               │ last_load_ts      │
-                               └──────────────────┘
+```mermaid
+erDiagram
+  BRONZE_STORES_RAW {
+    string store_group
+    string store_token
+    string store_name
+    date   batch_date
+    string file_name
+    timestamp load_ts
+  }
 
-┌─────────────────┐            ┌──────────────────┐
-│ sales_raw       │───────────>│ fact_sales        │──────────> output1_batch
-│ store_token     │            │ store_token (PK)  │──────────> output2_tx_date
-│ transaction_id  │            │ transaction_id(PK)│──────────> output3_top5
-│ receipt_token   │            │ receipt_token     │
-│ transaction_time│            │ transaction_time  │
-│ amount          │            │ amount            │
-│ user_role       │            │ user_role         │
-│ batch_date      │            │ batch_date        │
-│ file_name       │            │ last_load_ts      │
-│ load_ts         │            └──────────────────┘
-└─────────────────┘            ┌──────────────────┐
-                               │ sales_rejected   │
-┌─────────────────┐            │ (same as raw +   │
-│ ingestion_log   │            │  reject_reason)  │
-│ file_id (PK)    │            └──────────────────┘
-│ file_type       │
-│ batch_date      │
-│ file_name       │
-│ content_hash(UQ)│
-│ row_count       │
-│ status          │
-│ loaded_at       │
-└─────────────────┘
+  BRONZE_SALES_RAW {
+    string store_token
+    string transaction_id
+    string receipt_token
+    string transaction_time
+    string amount
+    string user_role
+    date   batch_date
+    string file_name
+    timestamp load_ts
+  }
+
+  BRONZE_INGESTION_LOG {
+    int    file_id
+    string file_type
+    date   batch_date
+    string file_name
+    string content_hash
+    int    row_count
+    string status
+    timestamp loaded_at
+  }
+
+  SILVER_DIM_STORE {
+    string dim_store_key
+    string store_token
+    string store_group
+    string store_name
+    timestamp valid_from
+    timestamp valid_to
+    boolean  is_current
+    timestamp first_seen_ts
+    timestamp last_load_ts
+  }
+
+  SILVER_FACT_SALES {
+    string store_token
+    string transaction_id
+    string receipt_token
+    timestamp transaction_time
+    number amount
+    string user_role
+    date   batch_date
+    timestamp last_load_ts
+  }
+
+  SILVER_SALES_REJECTED {
+    string store_token
+    string transaction_id
+    string receipt_token
+    string transaction_time
+    string amount
+    string user_role
+    date   batch_date
+    string file_name
+    string reject_reason
+    timestamp load_ts
+  }
+
+  GOLD_OUTPUT1_BATCH_REPORT {
+    date snapshot_date
+    date batch_date
+    int  total_processed_raw
+    int  total_valid
+    int  total_invalid
+    date processing_date
+  }
+
+  GOLD_OUTPUT2_TX_DATE_REPORT {
+    date snapshot_date
+    date transaction_date
+    int  stores_with_tx
+    number total_sales_amount
+    number total_sales_avg
+    number month_accumulated_sales
+    string top_store_token
+  }
+
+  GOLD_OUTPUT3_TOP5_BY_DATE {
+    date snapshot_date
+    date transaction_date
+    int  top_rank_id
+    number store_total_sales
+    string store_token
+    string store_name
+  }
+
+  BRONZE_STORES_RAW ||--o{ SILVER_DIM_STORE : "clean + SCD2"
+  BRONZE_SALES_RAW  ||--o{ SILVER_FACT_SALES : "clean + dedup"
+  BRONZE_SALES_RAW  ||--o{ SILVER_SALES_REJECTED : "invalid rows"
+  BRONZE_INGESTION_LOG ||--o{ GOLD_OUTPUT1_BATCH_REPORT : "file metrics"
+
+  SILVER_DIM_STORE  ||--o{ GOLD_OUTPUT3_TOP5_BY_DATE : "lookup store_name"
+  SILVER_FACT_SALES ||--o{ GOLD_OUTPUT1_BATCH_REPORT : "valid counts"
+  SILVER_FACT_SALES ||--o{ GOLD_OUTPUT2_TX_DATE_REPORT : "tx date stats"
+  SILVER_FACT_SALES ||--o{ GOLD_OUTPUT3_TOP5_BY_DATE : "daily store totals"
 ```
 
 ## Key Relationships
@@ -76,7 +144,7 @@ Full DDL is in [`snowflake/setup.sql`](../snowflake/setup.sql).
 
 | Table | Strategy | Key |
 |-------|----------|-----|
-| `SILVER.SILVER_DIM_STORE` | Incremental merge | `store_token` |
+| `SILVER.SILVER_DIM_STORE` | Incremental merge (SCD Type 2) | `dim_store_key` (surrogate), `is_current` |
 | `SILVER.SILVER_FACT_SALES` | Incremental merge | `(store_token, transaction_id)` |
 | `SILVER.SILVER_SALES_REJECTED` | Incremental | `(store_token, transaction_id, load_ts)` |
 
