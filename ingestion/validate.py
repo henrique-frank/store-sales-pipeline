@@ -22,7 +22,7 @@ def detect_file_type(filename: str) -> str | None:
 
 def extract_batch_date(filename: str) -> str:
     name = Path(filename).stem
-    match = re.search(r"(\d{8})$", name)
+    match = re.search(r"(\d{8})", name)
     if not match:
         raise ValueError(f"Cannot extract batch_date from {filename}")
     d = match.group(1)

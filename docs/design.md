@@ -100,6 +100,25 @@ Three report tables are materialized as full tables (rebuilt each run):
 
 After successful ingestion, source CSV files are moved to `archive/{type}/{batch_date}/` for historical reference.
 
+## Multiple Files per Batch Date
+
+The spec states "one or more files" per day, so the system is designed to handle multiple sales files sharing the same `batch_date`:
+
+- **Ingestion**: `glob("*.csv")` picks up all files in the inbox. Each is processed independently.
+- **Idempotency**: Based on SHA-256 content hash, not filename. Two files named `sales_20211001.csv` with different content both get ingested. Exact duplicates are skipped.
+- **Bronze**: All files land in `SALES_RAW` with the same `batch_date` but different `file_name` / `load_ts`.
+- **Silver dedup**: `QUALIFY ROW_NUMBER() OVER (PARTITION BY store_token, transaction_id ORDER BY load_ts DESC) = 1` keeps the latest received across all files.
+- **Archive**: If the same filename already exists in the archive (from a prior run), the file is saved with a hash suffix (e.g., `sales_20211001_a3f8b2c1.csv`) to prevent overwriting.
+- **Batch date extraction**: The regex extracts the first `YYYYMMDD` pattern found in the filename, so formats like `sales_20211001_2.csv` are also supported.
+
+## Key Considerations from Spec
+
+1. **`transaction_time` ≠ `batch_date`**: These are independent concepts. `batch_date` (from the filename) tracks when the file was delivered; `transaction_time` (from the row data) is when the sale actually occurred. Silver and Gold use `transaction_time` for analytics, while `batch_date` drives Output 1 (ingestion tracking).
+
+2. **Dedup key = `(store_token, transaction_id)`**: As stated in the spec, a unique transaction is identified by this combination. `silver_fact_sales` applies `QUALIFY ROW_NUMBER() OVER (PARTITION BY store_token, transaction_id ORDER BY load_ts DESC) = 1` to enforce this.
+
+3. **Keep latest received value**: On duplicate transactions, we keep the row with the highest `load_ts` (ingestion timestamp). This reflects "latest received" as order of arrival in our system, not by `transaction_time`.
+
 ## Scalability — Designed for Millions of Daily Transactions
 
 Although the sample data is small, this pipeline is designed to handle production volumes of millions of daily transactions without architectural changes.

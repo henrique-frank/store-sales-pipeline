@@ -97,10 +97,16 @@ def log_ingestion(cursor, file_type: str, batch_date: str, file_name: str,
     )
 
 
-def archive_file(filepath: str, file_type: str, batch_date: str, archive_dir: str):
+def archive_file(filepath: str, file_type: str, batch_date: str,
+                  archive_dir: str, content_hash: str):
     dest_dir = Path(archive_dir) / file_type / batch_date.replace("-", "")
     dest_dir.mkdir(parents=True, exist_ok=True)
-    shutil.move(filepath, str(dest_dir / Path(filepath).name))
+    stem = Path(filepath).stem
+    suffix = Path(filepath).suffix
+    dest = dest_dir / Path(filepath).name
+    if dest.exists():
+        dest = dest_dir / f"{stem}_{content_hash[:8]}{suffix}"
+    shutil.move(filepath, str(dest))
 
 
 def process_file(cursor, filepath: str, archive_dir: str) -> dict:
@@ -127,7 +133,7 @@ def process_file(cursor, filepath: str, archive_dir: str) -> dict:
 
     row_count = result[3] if result and len(result) > 3 else 0
     log_ingestion(cursor, file_type, batch_date, filename, content_hash, row_count)
-    archive_file(filepath, file_type, batch_date, archive_dir)
+    archive_file(filepath, file_type, batch_date, archive_dir, content_hash)
 
     return {
         "file": filename,

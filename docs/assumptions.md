@@ -34,6 +34,6 @@ These assumptions were made to proceed with the first version. Items marked with
 
 12. **Data retention**: All data is retained in Silver. Retention limits (40/40/10) only apply to Gold report outputs.
 
-13. **Multiple files per batch_date**: Possible (spec says "one or more files"). All rows are unioned and deduplication happens in Silver.
+13. **Multiple files per batch_date**: The spec states "one or more files" per day, so multiple sales files can share the same `batch_date`. Each file is tracked independently by content hash (idempotency). All rows are loaded into Bronze and deduplication by `(store_token, transaction_id)` happens in Silver. Archive uses a hash suffix to avoid filename collisions.
 
-14. **Archive**: Processed files are moved to `archive/{type}/{batch_date}/` to keep the inbox clean.
+14. **Archive**: Processed files are moved to `archive/{type}/{batch_date}/`. If a file with the same name already exists in the archive (from a prior run), the new file is saved with a hash suffix to prevent overwriting.
