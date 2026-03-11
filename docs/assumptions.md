@@ -8,7 +8,7 @@ These assumptions were made to proceed with the first version. Items marked with
 
 2. **Dedup key** is `(store_token, transaction_id)` as stated in the spec.
 
-3. **SCD Type 1 for stores**: If `store_name` or `store_group` changes for an existing `store_token`, we overwrite with the latest values but preserve `first_seen_ts`.
+3. **SCD Type 2 for stores**: If `store_name` or `store_group` changes for an existing `store_token`, we close the old record (`is_current=false`, `valid_to` set) and insert a new current record. This preserves full attribute history while always providing the latest values via `is_current=true`.
 
 ## File Format
 

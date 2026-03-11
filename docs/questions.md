@@ -21,8 +21,8 @@ Status: **Answered** | Sent: 2026-03-10 | Response: 2026-03-10
 5. **Multiple files per batch_date**: "Zero or more files per day" — can two files with the same name (e.g. two `sales_20211001.csv`) arrive on the same day? Does the second overwrite or append?
    - *Assumption*: Multiple files per type/batch_date are possible. We union all rows and deduplicate downstream. Idempotency via content hash prevents reprocessing the same file.
 
-6. **Store name changes**: Can `store_name` change for an existing `store_token` across different batch dates?
-   - *Assumption*: Yes, possible. We apply SCD Type 1 (overwrite with latest received, keep `first_seen_ts`).
+6. **Store name changes (SCD strategy)**: Can `store_name` or `store_group` change for an existing `store_token` across different batch dates? If so, do we need historical tracking of those changes?
+   - *Assumption*: Yes, possible. We apply SCD Type 2 — when attributes change, the old record is closed (`valid_to` set, `is_current=false`) and a new current record is inserted. This preserves full change history while downstream reports use `is_current=true` for the latest values.
 
 7. **Amount currency/format**: The spec says `Numeric(11,2)` but the sample shows `$63.98` with a dollar sign. Is the `$` prefix always present? Can other currencies appear?
    - *Assumption*: Always USD with `$` prefix. We strip `$` and parse to decimal. Unparseable values are marked invalid.

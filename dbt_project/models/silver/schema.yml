@@ -2,16 +2,22 @@ version: 2
 
 models:
   - name: silver_dim_store
-    description: "Store dimension (SCD Type 1) — latest attributes per store_token"
+    description: "Store dimension (SCD Type 2) — tracks attribute changes with valid_from/valid_to"
     columns:
-      - name: store_token
-        description: Unique store identifier (UUID)
+      - name: dim_store_key
+        description: Surrogate key (md5 of store_token + valid_from)
         tests: [not_null, unique]
+      - name: store_token
+        description: Natural store identifier (UUID)
+        tests: [not_null]
       - name: store_group
         description: Store group code (8-char hex)
         tests: [not_null]
       - name: store_name
         description: Store display name
+        tests: [not_null]
+      - name: is_current
+        description: Whether this is the active record for the store
         tests: [not_null]
 
   - name: silver_fact_sales

@@ -5,14 +5,17 @@
 ```
 BRONZE (raw)                    SILVER (clean)                  GOLD (reports)
 ┌─────────────────┐            ┌──────────────────┐
-│ stores_raw      │───────────>│ dim_store         │──────────> output3_top5
-│ store_group     │            │ store_token (PK)  │
-│ store_token     │            │ store_group       │
-│ store_name      │            │ store_name        │
-│ batch_date      │            │ first_seen_ts     │
-│ file_name       │            │ last_seen_ts      │
-│ load_ts         │            │ last_load_ts      │
-└─────────────────┘            └──────────────────┘
+│ stores_raw      │───────────>│ dim_store (SCD2)  │──────────> output3_top5
+│ store_group     │            │ dim_store_key (PK)│
+│ store_token     │            │ store_token       │
+│ store_name      │            │ store_group       │
+│ batch_date      │            │ store_name        │
+│ file_name       │            │ valid_from        │
+│ load_ts         │            │ valid_to          │
+└─────────────────┘            │ is_current        │
+                               │ first_seen_ts     │
+                               │ last_load_ts      │
+                               └──────────────────┘
 
 ┌─────────────────┐            ┌──────────────────┐
 │ sales_raw       │───────────>│ fact_sales        │──────────> output1_batch

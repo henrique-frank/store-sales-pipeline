@@ -38,5 +38,6 @@ select
 from ranked r
 left join {{ ref('silver_dim_store') }} s
     on s.store_token = r.store_token
+    and s.is_current = true
 where r.top_rank_id <= 5
 order by r.transaction_date desc, r.top_rank_id asc

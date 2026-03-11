@@ -82,7 +82,7 @@ Files are uploaded to a Snowflake internal stage (`@BRONZE.STG_INBOX`) via PUT, 
 
 dbt incremental models transform Bronze to Silver:
 
-- **silver_dim_store**: SCD Type 1 — upserts by `store_token`, keeps latest `store_name`/`store_group`, preserves `first_seen_ts`
+- **silver_dim_store**: SCD Type 2 — tracks attribute changes over time. When `store_name` or `store_group` changes, the old record is closed (`is_current=false`, `valid_to` set) and a new current record is inserted. Downstream joins filter on `is_current=true` for the latest values.
 - **silver_fact_sales**: Validates data types (timestamp parsed with explicit format `YYYYMMDDTHH24MISS.FF3` plus standard formats, amount stripped of `$`), filters invalid rows, deduplicates by `(store_token, transaction_id)` keeping the row with the latest `load_ts`
 - **silver_sales_rejected**: Captures invalid rows with a `reject_reason` column for audit
 
