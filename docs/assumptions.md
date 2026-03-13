@@ -8,7 +8,7 @@ These assumptions were made to proceed with the first version. Items marked with
 
 2. **Dedup key** is `(store_token, transaction_id)` as stated in the spec.
 
-3. **SCD Type 2 for stores**: If `store_name` or `store_group` changes for an existing `store_token`, we close the old record (`is_current=false`, `valid_to` set) and insert a new current record. This preserves full attribute history while always providing the latest values via `is_current=true`.
+3. **Dedup and SCD are applied in curated layers (not Bronze)**: Bronze is append-only and stores "what arrived, when it arrived" for audit and replay. Deduplication by `(store_token, transaction_id)` and SCD Type 2 for stores happen in the curated dim/fact tables (Silver/Gold), where business rules belong.
 
 ## File Format
 
@@ -24,16 +24,16 @@ These assumptions were made to proceed with the first version. Items marked with
 
 8. **Output 2 "month accumulated sales"** (ANSWERED): Confirmed as month-to-date running total (cumulative sum up to each transaction date within the month).
 
-9. **Output 1 counts**: `total_processed_raw` = all rows loaded into Bronze for that batch date. `total_invalid` = rows captured in `sales_rejected` (failed validation). `total_valid` = raw - invalid. This counts valid-format rows before deduplication.
+9. **Output 1 counts**: `total_processed_raw` = all rows loaded into Bronze for that batch date. `total_invalid` = rows captured in `sales_rejected` (failed validation). `total_valid` = rows in the Gold fact table (`fact_sales`) for that `batch_date` (i.e., valid rows after applying the dedup rule).
 
 10. **"Last 40/10 dates"**: Refers to distinct dates with data available, not calendar days.
 
 ## Operations
 
-11. **Idempotency**: Files are tracked by SHA-256 content hash. Re-running the pipeline on already-processed files skips them.
+11. **Idempotency**: Files are tracked by `(file_type, batch_date, file_name)` in `BRONZE.INGESTION_LOG`. If a file with the same triple is already marked as `LOADED`, it is skipped on re-runs.
 
 12. **Data retention**: All data is retained in Silver. Retention limits (40/40/10) only apply to Gold report outputs.
 
-13. **Multiple files per batch_date**: The spec states "one or more files" per day, so multiple sales files can share the same `batch_date`. Each file is tracked independently by content hash (idempotency). All rows are loaded into Bronze and deduplication by `(store_token, transaction_id)` happens in Silver. Archive uses a hash suffix to avoid filename collisions.
+13. **Multiple files per batch_date**: The spec states "one or more files" per day, so multiple sales files can share the same `batch_date`. Each physical file is tracked independently by `(file_type, batch_date, file_name)`. All rows are loaded into Bronze and deduplication by `(store_token, transaction_id)` happens in the curated tables.
 
-14. **Archive**: Processed files are moved to `archive/{type}/{batch_date}/`. If a file with the same name already exists in the archive (from a prior run), the new file is saved with a hash suffix to prevent overwriting.
+14. **Archive**: Processed files are moved to `archive/{ingestion_date}/{type}/{batch_date}/`. We assume upstream does not resend the exact same file name for the same batch date with different content; if it does, the later copy simply overwrites the prior one in the archive.

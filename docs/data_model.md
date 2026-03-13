@@ -30,33 +30,10 @@ erDiagram
     string file_type
     date   batch_date
     string file_name
-    string content_hash
+    string content_hash  -- stores file_name; kept for backwards-compatibility
     int    row_count
     string status
     timestamp loaded_at
-  }
-
-  SILVER_DIM_STORE {
-    string dim_store_key
-    string store_token
-    string store_group
-    string store_name
-    timestamp valid_from
-    timestamp valid_to
-    boolean  is_current
-    timestamp first_seen_ts
-    timestamp last_load_ts
-  }
-
-  SILVER_FACT_SALES {
-    string store_token
-    string transaction_id
-    string receipt_token
-    timestamp transaction_time
-    number amount
-    string user_role
-    date   batch_date
-    timestamp last_load_ts
   }
 
   SILVER_SALES_REJECTED {
@@ -72,7 +49,7 @@ erDiagram
     timestamp load_ts
   }
 
-  GOLD_OUTPUT1_BATCH_REPORT {
+  REPORT_OUTPUT1_BATCH_REPORT {
     date snapshot_date
     date batch_date
     int  total_processed_raw
@@ -81,7 +58,7 @@ erDiagram
     date processing_date
   }
 
-  GOLD_OUTPUT2_TX_DATE_REPORT {
+  REPORT_OUTPUT2_TX_DATE_REPORT {
     date snapshot_date
     date transaction_date
     int  stores_with_tx
@@ -91,7 +68,7 @@ erDiagram
     string top_store_token
   }
 
-  GOLD_OUTPUT3_TOP5_BY_DATE {
+  REPORT_OUTPUT3_TOP5_BY_DATE {
     date snapshot_date
     date transaction_date
     int  top_rank_id
@@ -100,15 +77,15 @@ erDiagram
     string store_name
   }
 
-  BRONZE_STORES_RAW ||--o{ SILVER_DIM_STORE : "clean + SCD2"
-  BRONZE_SALES_RAW  ||--o{ SILVER_FACT_SALES : "clean + dedup"
+  BRONZE_STORES_RAW ||--o{ GOLD_DIM_STORE : "clean + SCD2"
+  BRONZE_SALES_RAW  ||--o{ GOLD_FACT_SALES : "clean + dedup"
   BRONZE_SALES_RAW  ||--o{ SILVER_SALES_REJECTED : "invalid rows"
-  BRONZE_INGESTION_LOG ||--o{ GOLD_OUTPUT1_BATCH_REPORT : "file metrics"
+  BRONZE_INGESTION_LOG ||--o{ REPORT_OUTPUT1_BATCH_REPORT : "file metrics"
 
-  SILVER_DIM_STORE  ||--o{ GOLD_OUTPUT3_TOP5_BY_DATE : "lookup store_name"
-  SILVER_FACT_SALES ||--o{ GOLD_OUTPUT1_BATCH_REPORT : "valid counts"
-  SILVER_FACT_SALES ||--o{ GOLD_OUTPUT2_TX_DATE_REPORT : "tx date stats"
-  SILVER_FACT_SALES ||--o{ GOLD_OUTPUT3_TOP5_BY_DATE : "daily store totals"
+  GOLD_DIM_STORE    ||--o{ REPORT_OUTPUT3_TOP5_BY_DATE : "lookup store_name"
+  GOLD_FACT_SALES   ||--o{ REPORT_OUTPUT1_BATCH_REPORT : "valid counts"
+  GOLD_FACT_SALES   ||--o{ REPORT_OUTPUT2_TX_DATE_REPORT : "tx date stats"
+  GOLD_FACT_SALES   ||--o{ REPORT_OUTPUT3_TOP5_BY_DATE : "daily store totals"
 ```
 
 ## Key Relationships
@@ -144,14 +121,19 @@ Full DDL is in [`snowflake/setup.sql`](../snowflake/setup.sql).
 
 | Table | Strategy | Key |
 |-------|----------|-----|
-| `SILVER.SILVER_DIM_STORE` | Incremental merge (SCD Type 2) | `dim_store_key` (surrogate), `is_current` |
-| `SILVER.SILVER_FACT_SALES` | Incremental merge | `(store_token, transaction_id)` |
 | `SILVER.SILVER_SALES_REJECTED` | Incremental | `(store_token, transaction_id, load_ts)` |
 
 ### Gold Tables (managed by dbt)
 
 | Table | Materialization | Rows |
 |-------|----------------|------|
-| `GOLD.GOLD_OUTPUT1_BATCH_REPORT` | Table (rebuilt) | <= 40 |
-| `GOLD.GOLD_OUTPUT2_TX_DATE_REPORT` | Table (rebuilt) | <= 40 |
-| `GOLD.GOLD_OUTPUT3_TOP5_BY_DATE` | Table (rebuilt) | <= 50 |
+| `GOLD.GOLD_DIM_STORE` | Incremental SCD2 dimension | n/a |
+| `GOLD.GOLD_FACT_SALES` | Incremental deduped fact | n/a |
+
+### Report Tables (managed by dbt)
+
+| Table | Materialization | Rows |
+|-------|----------------|------|
+| `REPORTS.REPORT_OUTPUT1_BATCH_REPORT` | Table (rebuilt) | <= 40 |
+| `REPORTS.REPORT_OUTPUT2_TX_DATE_REPORT` | Table (rebuilt) | <= 40 |
+| `REPORTS.REPORT_OUTPUT3_TOP5_BY_DATE` | Table (rebuilt) | <= 50 |

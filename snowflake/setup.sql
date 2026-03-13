@@ -63,11 +63,10 @@ CREATE TABLE IF NOT EXISTS BRONZE.INGESTION_LOG (
     file_type     STRING NOT NULL,
     batch_date    DATE NOT NULL,
     file_name     STRING NOT NULL,
-    content_hash  STRING NOT NULL,
+    content_hash  STRING, -- kept for backwards-compatibility, not used
     row_count     INTEGER DEFAULT 0,
     status        STRING DEFAULT 'LOADED',
-    loaded_at     TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
-    UNIQUE (content_hash)
+    loaded_at     TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
 );
 
 -- ============================================================

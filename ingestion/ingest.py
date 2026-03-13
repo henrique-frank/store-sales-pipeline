@@ -1,28 +1,52 @@
-"""
-Store Sales Pipeline — CSV Ingestion to Snowflake Bronze
-
-Usage:
-    python -m ingestion.ingest --config config/config.yaml
-"""
-
 import argparse
+import logging
 import os
+import re
 import shutil
-import sys
+from datetime import datetime
 from pathlib import Path
 
 import snowflake.connector
+import yaml
 
-from ingestion.config import load_config
-from ingestion.validate import (
-    compute_file_hash,
-    detect_file_type,
-    extract_batch_date,
-    has_header,
-)
+def detect_file_type(filename: str) -> str | None:
+    name = Path(filename).name
+    if name.startswith("stores_"):
+        return "stores"
+    if name.startswith("sales_"):
+        return "sales"
+    return None
 
-STORES_COLUMNS = 3
-SALES_COLUMNS = 6
+
+def extract_batch_date(filename: str) -> str:
+    """Extract YYYY-MM-DD batch_date from a filename like sales_20211001.csv."""
+    name = Path(filename).stem
+    match = re.search(r"(\d{8})", name)
+    if not match:
+        raise ValueError(f"Cannot extract batch_date from {filename}")
+    d = match.group(1)
+    return f"{d[:4]}-{d[4:6]}-{d[6:8]}"
+
+
+def has_header(filepath: str) -> bool:
+    """Heuristic: if first row contains known column names, treat it as a header."""
+    known_store_headers = {"store_group", "store_token", "store_name"}
+    known_sales_headers = {
+        "store_token",
+        "transaction_id",
+        "receipt_token",
+        "transaction_time",
+        "amount",
+        "user_role",
+    }
+    with open(filepath, "r", encoding="utf-8") as f:
+        first_line = f.readline().strip().lower()
+    fields = {col.strip() for col in first_line.split(",")}
+    if len(fields & known_store_headers) >= 2:
+        return True
+    if len(fields & known_sales_headers) >= 2:
+        return True
+    return False
 
 
 def get_connection(sf_cfg: dict):
@@ -36,76 +60,78 @@ def get_connection(sf_cfg: dict):
     )
 
 
-def is_already_processed(cursor, content_hash: str) -> bool:
+def is_already_processed(
+    cursor, file_type: str, batch_date: str, file_name: str
+) -> bool:
+    """
+    Simple idempotency: assume the same file (by name) is not resent
+    with different content. If we have already logged this file as
+    LOADED for the given type and batch_date, we skip it.
+    """
     cursor.execute(
-        "SELECT COUNT(*) FROM BRONZE.INGESTION_LOG WHERE content_hash = %s",
-        (content_hash,),
+        """
+        SELECT COUNT(*)
+        FROM BRONZE.INGESTION_LOG
+        WHERE file_type = %s
+          AND batch_date = %s
+          AND file_name = %s
+          AND status = 'LOADED'
+        """,
+        (file_type, batch_date, file_name),
     )
     return cursor.fetchone()[0] > 0
 
 
-def put_file(cursor, filepath: str):
-    cursor.execute(f"PUT 'file://{filepath}' @BRONZE.STG_INBOX AUTO_COMPRESS=FALSE OVERWRITE=TRUE")
-
-
-def copy_stores(cursor, file_name: str, batch_date: str, skip_header: bool):
-    skip = 1 if skip_header else 0
-    sql = f"""
-        COPY INTO BRONZE.STORES_RAW (store_group, store_token, store_name, batch_date, file_name)
-        FROM (
-            SELECT $1, $2, $3,
-                   '{batch_date}'::DATE,
-                   '{file_name}'
-            FROM @BRONZE.STG_INBOX/{file_name}
-        )
-        FILE_FORMAT = (FORMAT_NAME = BRONZE.FF_CSV SKIP_HEADER = {skip})
-        ON_ERROR = 'CONTINUE'
+def copy_into_bronze(
+    cursor, file_type: str, file_name: str, batch_date: str, skip_header: bool
+):
     """
-    cursor.execute(sql)
-    return cursor.fetchone()
-
-
-def copy_sales(cursor, file_name: str, batch_date: str, skip_header: bool):
-    skip = 1 if skip_header else 0
-    sql = f"""
-        COPY INTO BRONZE.SALES_RAW (
-            store_token, transaction_id, receipt_token,
-            transaction_time, amount, user_role,
-            batch_date, file_name
-        )
-        FROM (
-            SELECT $1, $2, $3, $4, $5, $6,
-                   '{batch_date}'::DATE,
-                   '{file_name}'
-            FROM @BRONZE.STG_INBOX/{file_name}
-        )
-        FILE_FORMAT = (FORMAT_NAME = BRONZE.FF_CSV SKIP_HEADER = {skip})
-        ON_ERROR = 'CONTINUE'
+    Single COPY INTO for both stores and sales, driven by file_type.
     """
-    cursor.execute(sql)
-    return cursor.fetchone()
+    skip = 1 if skip_header else 0
 
-
-def log_ingestion(cursor, file_type: str, batch_date: str, file_name: str,
-                  content_hash: str, row_count: int):
-    cursor.execute(
+    if file_type == "stores":
+        sql = f"""
+            COPY INTO BRONZE.STORES_RAW (
+                store_group, store_token, store_name,
+                batch_date, file_name
+            )
+            FROM (
+                SELECT
+                    $1, $2, $3,
+                    '{batch_date}'::DATE,
+                    '{file_name}'
+                FROM @BRONZE.STG_INBOX/{file_name}
+            )
+            FILE_FORMAT = (FORMAT_NAME = BRONZE.FF_CSV SKIP_HEADER = {skip})
+            ON_ERROR = 'CONTINUE'
         """
-        INSERT INTO BRONZE.INGESTION_LOG (file_type, batch_date, file_name, content_hash, row_count)
-        VALUES (%s, %s, %s, %s, %s)
-        """,
-        (file_type, batch_date, file_name, content_hash, row_count),
-    )
+    else:
+        sql = f"""
+            COPY INTO BRONZE.SALES_RAW (
+                store_token, transaction_id, receipt_token,
+                transaction_time, amount, user_role,
+                batch_date, file_name
+            )
+            FROM (
+                SELECT
+                    $1, $2, $3, $4, $5, $6,
+                    '{batch_date}'::DATE,
+                    '{file_name}'
+                FROM @BRONZE.STG_INBOX/{file_name}
+            )
+            FILE_FORMAT = (FORMAT_NAME = BRONZE.FF_CSV SKIP_HEADER = {skip})
+            ON_ERROR = 'CONTINUE'
+        """
+
+    cursor.execute(sql)
+    return cursor.fetchone()
 
 
-def archive_file(filepath: str, file_type: str, batch_date: str,
-                  archive_dir: str, content_hash: str):
+def archive_file(filepath: str, file_type: str, batch_date: str, archive_dir: str):
     dest_dir = Path(archive_dir) / file_type / batch_date.replace("-", "")
     dest_dir.mkdir(parents=True, exist_ok=True)
-    stem = Path(filepath).stem
-    suffix = Path(filepath).suffix
     dest = dest_dir / Path(filepath).name
-    if dest.exists():
-        dest = dest_dir / f"{stem}_{content_hash[:8]}{suffix}"
     shutil.move(filepath, str(dest))
 
 
@@ -116,24 +142,35 @@ def process_file(cursor, filepath: str, archive_dir: str) -> dict:
         return {"file": filename, "status": "SKIPPED", "reason": "unknown file type"}
 
     batch_date = extract_batch_date(filename)
-    content_hash = compute_file_hash(filepath)
 
-    if is_already_processed(cursor, content_hash):
-        return {"file": filename, "status": "SKIPPED", "reason": "already processed"}
+    if is_already_processed(cursor, file_type, batch_date, filename):
+        # File has already been loaded previously; skip COPY but still
+        # move it out of the inbox for cleanliness.
+        archive_file(filepath, file_type, batch_date, archive_dir)
+        return {
+            "file": filename,
+            "status": "SKIPPED",
+            "reason": "already processed (filename)",
+        }
 
     header = has_header(filepath)
 
     abs_path = str(Path(filepath).resolve()).replace("\\", "/")
-    put_file(cursor, abs_path)
+    cursor.execute(
+        f"PUT 'file://{abs_path}' @BRONZE.STG_INBOX AUTO_COMPRESS=FALSE OVERWRITE=TRUE"
+    )
 
-    if file_type == "stores":
-        result = copy_stores(cursor, filename, batch_date, header)
-    else:
-        result = copy_sales(cursor, filename, batch_date, header)
+    result = copy_into_bronze(cursor, file_type, filename, batch_date, header)
 
     row_count = result[3] if result and len(result) > 3 else 0
-    log_ingestion(cursor, file_type, batch_date, filename, content_hash, row_count)
-    archive_file(filepath, file_type, batch_date, archive_dir, content_hash)
+    cursor.execute(
+        """
+        INSERT INTO BRONZE.INGESTION_LOG (file_type, batch_date, file_name, content_hash, row_count)
+        VALUES (%s, %s, %s, %s, %s)
+        """,
+        (file_type, batch_date, filename, filename, row_count),
+    )
+    archive_file(filepath, file_type, batch_date, archive_dir)
 
     return {
         "file": filename,
@@ -145,13 +182,13 @@ def process_file(cursor, filepath: str, archive_dir: str) -> dict:
 
 
 def run(config_path: str):
-    cfg = load_config(config_path)
+    with open(config_path, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
     inbox = cfg["paths"]["inbox"]
     archive = cfg["paths"]["archive"]
 
     if not os.path.isdir(inbox):
-        print(f"Inbox directory not found: {inbox}")
-        sys.exit(1)
+        raise FileNotFoundError(f"Inbox directory not found: {inbox}")
 
     files = sorted(
         str(p) for p in Path(inbox).glob("*.csv")
@@ -159,10 +196,10 @@ def run(config_path: str):
     )
 
     if not files:
-        print("No files to process.")
+        logging.info("No files to process in inbox directory %s", inbox)
         return
 
-    print(f"Found {len(files)} file(s) to process.")
+    logging.info("Found %d file(s) to process in inbox directory %s", len(files), inbox)
 
     conn = get_connection(cfg["snowflake"])
     cursor = conn.cursor()
@@ -173,12 +210,14 @@ def run(config_path: str):
         for filepath in files:
             result = process_file(cursor, filepath, archive)
             results.append(result)
-            print(f"  {result['file']}: {result['status']}"
-                  + (f" ({result.get('rows', 0)} rows)" if result['status'] == 'LOADED' else ""))
+            msg = f"{result['file']}: {result['status']}"
+            if result["status"] == "LOADED":
+                msg += f" ({result.get('rows', 0)} rows)"
+            logging.info(msg)
 
         loaded = sum(1 for r in results if r["status"] == "LOADED")
         skipped = sum(1 for r in results if r["status"] == "SKIPPED")
-        print(f"\nDone. Loaded: {loaded}, Skipped: {skipped}")
+        logging.info("Done. Loaded: %d file(s), Skipped: %d file(s)", loaded, skipped)
     finally:
         cursor.close()
         conn.close()
@@ -188,6 +227,19 @@ def main():
     parser = argparse.ArgumentParser(description="Ingest CSV files into Snowflake Bronze")
     parser.add_argument("--config", required=True, help="Path to config.yaml")
     args = parser.parse_args()
+
+    log_dir = Path("logs")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / f"ingestion_{datetime.now().date().isoformat()}.log"
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        handlers=[
+            logging.FileHandler(log_file, encoding="utf-8"),
+            logging.StreamHandler(),
+        ],
+    )
     run(args.config)
 
 

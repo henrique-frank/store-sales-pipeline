@@ -91,8 +91,15 @@ The config file references these environment variables — no credentials are st
 
 ### 4. dbt setup
 
+Install dbt Core with the Snowflake adapter (this gives you the `dbt` CLI):
+
 ```bash
 pip install dbt-snowflake
+```
+
+Then create your local profile:
+
+```bash
 cd dbt_project
 cp profiles.yml.example profiles.yml
 ```
@@ -106,7 +113,7 @@ The profiles file reads credentials from the same environment variables set in s
 Place your CSV files in the `inbox/` directory, then run:
 
 ```bash
-python -m ingestion.ingest --config config/config.yaml
+python ingestion/ingest.py --config config/config.yaml
 ```
 
 The script will:
@@ -145,7 +152,7 @@ SELECT * FROM GOLD.GOLD_OUTPUT3_TOP5_BY_DATE ORDER BY transaction_date DESC, top
 mkdir inbox
 cp data/light/*.csv inbox/
 
-python -m ingestion.ingest --config config/config.yaml
+python ingestion/ingest.py --config config/config.yaml
 
 cd dbt_project
 dbt build --profiles-dir .
@@ -169,9 +176,7 @@ python -m pytest tests/ -v
 ├── snowflake/
 │   └── setup.sql                      Snowflake DDL (schemas, tables, stage)
 ├── ingestion/
-│   ├── ingest.py                      Main ingestion script
-│   ├── config.py                      Config loader
-│   └── validate.py                    File validation utilities
+│   └── ingest.py                      Main ingestion script (includes config + helpers)
 ├── dbt_project/
 │   ├── dbt_project.yml                dbt configuration
 │   ├── profiles.yml.example           dbt profiles template

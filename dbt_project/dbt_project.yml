@@ -13,3 +13,6 @@ models:
     gold:
       +materialized: table
       +schema: GOLD
+    report:
+      +materialized: table
+      +schema: REPORTS

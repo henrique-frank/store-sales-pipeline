@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: report_output1_batch_report
+    description: "Output 1: Transactions processed by batch date (last 40 batch dates)"
+    columns:
+      - name: snapshot_date
+        description: Date the report was generated
+        tests: [not_null]
+      - name: batch_date
+        description: "File batch date (from filename)"
+        tests: [not_null]
+      - name: total_processed_raw
+        description: Total raw rows ingested for this batch date
+        tests: [not_null]
+      - name: total_valid
+        description: Valid rows after validation and deduplication
+        tests: [not_null]
+      - name: total_invalid
+        description: Rows rejected by the validation step
+        tests: [not_null]
+      - name: processing_date
+        description: Date when the batch was processed
+        tests: [not_null]
+
+  - name: report_output2_tx_date_report
+    description: "Output 2: Sales by transaction date (last 40 transaction dates)"
+    columns:
+      - name: snapshot_date
+        tests: [not_null]
+      - name: transaction_date
+        tests: [not_null]
+      - name: stores_with_tx
+        description: Number of distinct stores with transactions
+        tests: [not_null]
+      - name: total_sales_amount
+        tests: [not_null]
+      - name: total_sales_avg
+        tests: [not_null]
+      - name: month_accumulated_sales
+        description: Month-to-date running total of sales
+        tests: [not_null]
+
+  - name: report_output3_top5_by_date
+    description: "Output 3: Top 5 sales stores per transaction date (last 10 transaction dates)"
+    columns:
+      - name: snapshot_date
+        tests: [not_null]
+      - name: transaction_date
+        tests: [not_null]
+      - name: top_rank_id
+        description: "Rank 1-5 by total sales descending"
+        tests: [not_null]
+      - name: store_total_sales
+        tests: [not_null]
+      - name: store_token
+        tests: [not_null]
+

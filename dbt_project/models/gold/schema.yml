@@ -1,57 +1,40 @@
 version: 2
 
 models:
-  - name: gold_output1_batch_report
-    description: "Output 1: Transactions processed by batch date (last 40 batch dates)"
+  - name: gold_dim_store
+    description: "Store dimension (SCD Type 2) — tracks attribute changes with valid_from/valid_to (Gold layer)"
     columns:
-      - name: snapshot_date
-        description: Date the report was generated
-        tests: [not_null]
-      - name: batch_date
-        description: "File batch date (from filename)"
-        tests: [not_null]
-      - name: total_processed_raw
-        description: Total raw rows ingested for this batch date
-        tests: [not_null]
-      - name: total_valid
-        description: Valid rows after validation
-        tests: [not_null]
-      - name: total_invalid
-        description: Rejected rows (raw - valid)
-        tests: [not_null]
-      - name: processing_date
-        description: Date when the batch was processed
-        tests: [not_null]
-
-  - name: gold_output2_tx_date_report
-    description: "Output 2: Sales by transaction date (last 40 transaction dates)"
-    columns:
-      - name: snapshot_date
-        tests: [not_null]
-      - name: transaction_date
-        tests: [not_null]
-      - name: stores_with_tx
-        description: Number of distinct stores with transactions
-        tests: [not_null]
-      - name: total_sales_amount
-        tests: [not_null]
-      - name: total_sales_avg
-        tests: [not_null]
-      - name: month_accumulated_sales
-        description: Month-to-date running total of sales
-        tests: [not_null]
-
-  - name: gold_output3_top5_by_date
-    description: "Output 3: Top 5 sales stores per transaction date (last 10 transaction dates)"
-    columns:
-      - name: snapshot_date
-        tests: [not_null]
-      - name: transaction_date
-        tests: [not_null]
-      - name: top_rank_id
-        description: "Rank 1-5 by total sales descending"
-        tests: [not_null]
-      - name: store_total_sales
-        tests: [not_null]
+      - name: dim_store_key
+        description: Surrogate key (md5 of store_token + valid_from)
+        tests: [not_null, unique]
       - name: store_token
+        description: Natural store identifier (UUID)
         tests: [not_null]
+      - name: store_group
+        description: Store group code (8-char hex)
+        tests: [not_null]
+      - name: store_name
+        description: Store display name
+        tests: [not_null]
+      - name: is_current
+        description: Whether this is the active record for the store
+        tests: [not_null]
+
+  - name: gold_fact_sales
+    description: "Deduplicated valid sales — keyed by (store_token, transaction_id), latest received wins (Gold layer)"
+    columns:
+      - name: store_token
+        description: Store that made the sale
+        tests: [not_null]
+      - name: transaction_id
+        description: Transaction identifier
+        tests: [not_null]
+      - name: amount
+        description: Sale amount in USD
+        tests: [not_null]
+      - name: transaction_time
+        description: When the sale occurred
+        tests: [not_null]
+    tests:
+      - unique:
+          column_name: "store_token || '-' || transaction_id"
