@@ -18,12 +18,16 @@ flowchart LR
       salesRaw[sales_raw]
       logTable[ingestion_log]
     end
-    subgraph silver ["Silver (clean + dedup)"]
+    subgraph silver ["Silver (validation)"]
+      storesClean[stores_clean]
+      salesValid[sales_valid]
+      salesRejected[sales_rejected]
+    end
+    subgraph gold ["Gold (dim/fact)"]
       dimStore[dim_store]
       factSales[fact_sales]
-      rejected[sales_rejected]
     end
-    subgraph gold ["Gold (reports)"]
+    subgraph reports ["Reports"]
       out1["output1: batch report"]
       out2["output2: tx date stats"]
       out3["output3: top 5 stores"]
@@ -33,9 +37,11 @@ flowchart LR
   copy --> storesRaw
   copy --> salesRaw
   copy --> logTable
-  storesRaw -->|"dbt merge"| dimStore
-  salesRaw -->|"dbt merge"| factSales
-  salesRaw -->|"dbt incremental"| rejected
+  storesRaw -->|"dbt silver"| storesClean
+  salesRaw -->|"dbt silver"| salesValid
+  salesRaw -->|"dbt silver"| salesRejected
+  storesClean -->|"dbt gold (SCD2)"| dimStore
+  salesValid -->|"dbt gold (dedup)"| factSales
   factSales --> out1
   factSales --> out2
   factSales --> out3
@@ -45,8 +51,9 @@ flowchart LR
 | Layer | Purpose |
 |-------|---------|
 | **Bronze** | Raw CSV data with ingestion metadata (`batch_date`, `file_name`, `load_ts`) |
-| **Silver** | Validated, typed, deduplicated via incremental merge |
-| **Gold** | 3 report outputs with retention limits (40/40/10 dates) |
+| **Silver** | Validation / quality gate (`stores_clean`, `sales_valid`, `sales_rejected`) |
+| **Gold** | Analytics model (`dim_store` SCD2 + `fact_sales` deduped) |
+| **Reports** | 3 report tables with retention limits (40/40/10 dates) |
 
 > Designed for millions of daily transactions — all transforms are SQL-based with no Python loops over data. Scales by adjusting Snowflake warehouse size.
 
@@ -126,24 +133,18 @@ The script will:
 
 ```bash
 cd dbt_project
-dbt run --profiles-dir .
-dbt test --profiles-dir .
+dbt run --select silver gold report --profiles-dir .
+dbt test --select gold report --profiles-dir .
 ```
 
-This transforms Bronze → Silver → Gold and produces the 3 report outputs.
-
-For a full build (run + test in one command):
-
-```bash
-dbt build --profiles-dir .
-```
+This transforms Bronze → Silver → Gold and then builds the 3 report tables in the REPORTS schema.
 
 ### Step 3: Query outputs
 
 ```sql
-SELECT * FROM GOLD.GOLD_OUTPUT1_BATCH_REPORT ORDER BY batch_date DESC;
-SELECT * FROM GOLD.GOLD_OUTPUT2_TX_DATE_REPORT ORDER BY transaction_date DESC;
-SELECT * FROM GOLD.GOLD_OUTPUT3_TOP5_BY_DATE ORDER BY transaction_date DESC, top_rank_id;
+SELECT * FROM REPORTS.REPORT_OUTPUT1_BATCH_REPORT ORDER BY batch_date DESC;
+SELECT * FROM REPORTS.REPORT_OUTPUT2_TX_DATE_REPORT ORDER BY transaction_date DESC;
+SELECT * FROM REPORTS.REPORT_OUTPUT3_TOP5_BY_DATE ORDER BY transaction_date DESC, top_rank_id;
 ```
 
 ## Testing with sample data
@@ -178,15 +179,16 @@ python -m pytest tests/ -v
 ├── ingestion/
 │   └── ingest.py                      Main ingestion script (includes config + helpers)
 ├── dbt_project/
-│   ├── dbt_project.yml                dbt configuration
+│   ├── dbt_project.yml                dbt configuration (Bronze/Silver/Gold/REPORTS)
 │   ├── profiles.yml.example           dbt profiles template
 │   ├── macros/
 │   │   ├── clean_amount.sql           Strip $ and parse amounts
 │   │   └── generate_schema_name.sql   Override default schema naming
 │   └── models/
 │       ├── sources/                   Bronze source definitions
-│       ├── silver/                    Clean + dedup models
-│       └── gold/                      Report output models
+│       ├── silver/                    Validation models (clean + rejected)
+│       ├── gold/                      Dim/fact models
+│       └── report/                    Report output models (REPORTS schema)
 ├── data/
 │   ├── light/                         Unified light dataset (~500 sales, 50 days)
 │   └── generate_samples.py            Generate the light test data
